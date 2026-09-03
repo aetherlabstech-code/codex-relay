@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codex Remote (GitHub)</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c232c; --border:#2d333b;
+    --text:#e6edf3; --muted:#8b949e; --accent:#7c5cff; --accent2:#00d3a7; --user:#1f6feb;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;
+    display:flex;flex-direction:column}
+  header{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--panel);
+    border-bottom:1px solid var(--border);flex-wrap:wrap}
+  header .dot{width:10px;height:10px;border-radius:50%;background:var(--accent2);box-shadow:0 0 10px var(--accent2)}
+  header h1{font-size:14px;margin:0;font-weight:600}
+  header select,header button{background:var(--panel2);color:var(--text);border:1px solid var(--border);
+    border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer}
+  header .sp{margin-left:auto}
+  header .sess{font-size:11px;color:var(--muted);font-family:ui-monospace,Consolas,monospace}
+  #log{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px;max-width:900px;width:100%;margin:0 auto}
+  .msg{display:flex;gap:10px}
+  .msg .who{flex:0 0 auto;width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+  .msg.user .who{background:var(--user)}
+  .msg.codex .who{background:#22333b;border:1px solid var(--border)}
+  .msg .body{flex:1;min-width:0}
+  .msg .name{font-size:12px;color:var(--muted);margin-bottom:3px}
+  .msg .bubble{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:11px 14px;
+    white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
+  .msg.user .bubble{background:#132a4d;border-color:#1f4e8a}
+  .msg.err .bubble{background:#3a1418;border-color:#7a2530;color:#ffb3ba}
+  .typing{color:var(--muted);font-style:italic}
+  footer{border-top:1px solid var(--border);background:var(--panel);padding:12px 16px}
+  .inputrow{display:flex;gap:10px;max-width:900px;margin:0 auto}
+  textarea{flex:1;resize:none;background:var(--panel2);color:var(--text);border:1px solid var(--border);
+    border-radius:12px;padding:12px 14px;font:inherit;min-height:50px;max-height:200px}
+  textarea:focus{outline:none;border-color:var(--accent)}
+  .send{background:var(--accent);color:#fff;border:none;border-radius:12px;padding:0 20px;font-weight:600;cursor:pointer}
+  .send:disabled{opacity:.5}
+  .hint{max-width:900px;margin:6px auto 0;font-size:11px;color:var(--muted)}
+  /* setup panel */
+  .setup{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:20;padding:20px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:440px;width:100%}
+  .card h2{margin:0 0 6px;font-size:16px}
+  .card p{color:var(--muted);font-size:13px;margin:6px 0 14px}
+  .card input{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:11px 12px;font:inherit;margin-bottom:10px}
+  .card button{width:100%;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px;font-weight:600;cursor:pointer}
+  /* drawer */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9}
+  .drawer{position:fixed;top:0;left:0;bottom:0;width:min(420px,88vw);z-index:10;background:var(--panel);
+    border-right:1px solid var(--border);display:flex;flex-direction:column}
+  .drawer-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)}
+  .dclose{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:8px;width:32px;height:32px;cursor:pointer}
+  .dsearch{margin:12px 16px;padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;color:var(--text);font:inherit}
+  .dlist{flex:1;overflow-y:auto;padding:0 10px 14px}
+  .sitem{position:relative;padding:11px 12px;border:1px solid var(--border);border-radius:10px;margin:8px 4px;cursor:pointer;background:var(--panel2)}
+  .sitem.active{border-color:var(--accent2)}
+  .sitem .t{font-size:13px;line-height:1.5;padding-right:26px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .sitem .m{margin-top:5px;font-size:11px;color:var(--muted);font-family:ui-monospace,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .strash{position:absolute;top:8px;right:8px;background:transparent;border:none;cursor:pointer;font-size:14px;opacity:.5}
+  .dloading{color:var(--muted);text-align:center;padding:20px;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <h1>Codex Remote</h1>
+  <select id="mode" title="実行モード">
+    <option value="read-only">read-only（見るだけ）</option>
+    <option value="full-auto">workspace-write（編集可）</option>
+    <option value="bypass">bypass（無制限）</option>
+  </select>
+  <button id="sessionsBtn">☰ 会話</button>
+  <button id="reset">新規</button>
+  <span class="sp"></span>
+  <span class="sess" id="sess">--</span>
+</header>
+<div id="log"></div>
+
+<div id="drawer" class="drawer" hidden>
+  <div class="drawer-head"><strong>会話一覧</strong><button id="drawerClose" class="dclose">✕</button></div>
+  <input id="sessSearch" class="dsearch" placeholder="検索（内容 / フォルダ）">
+  <div id="sessList" class="dlist"></div>
+</div>
+<div id="overlay" class="overlay" hidden></div>
+
+<footer>
+  <div class="inputrow">
+    <textarea id="input" placeholder="Codexへ指示（Enterで送信 / Shift+Enterで改行）"></textarea>
+    <button class="send" id="send">送信</button>
+  </div>
+  <div class="hint">GitHub経由でPCのCodexに届きます（トンネルなし）。返事は数秒かかります。</div>
+</footer>
+
+<div id="setup" class="setup" hidden>
+  <div class="card">
+    <h2>接続設定</h2>
+    <p>PCで発行した GitHub トークン（gist権限）を入力してください。端末内に保存され、外部には送られません。</p>
+    <input id="tokenInput" type="password" placeholder="ghp_... トークン" autocomplete="off">
+    <input id="gistInput" type="text" placeholder="Gist ID（URLに無い場合のみ）">
+    <button id="setupSave">接続</button>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const log=$('log'), input=$('input'), send=$('send'), modeSel=$('mode'), sessEl=$('sess');
+function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+// ---- config (token + gist id) ----
+const url=new URL(location.href);
+let GIST=url.searchParams.get('gist')||localStorage.getItem('cr_gist')||'';
+let TOKEN=url.searchParams.get('k')||localStorage.getItem('cr_token')||'';
+if(url.searchParams.get('gist')||url.searchParams.get('k')){
+  if(GIST)localStorage.setItem('cr_gist',GIST);
+  if(TOKEN)localStorage.setItem('cr_token',TOKEN);
+  history.replaceState(null,'',location.pathname);
+}
+const API=()=>`https://api.github.com/gists/${GIST}`;
+function ghHeaders(extra){return Object.assign({'Authorization':`token ${TOKEN}`,'Accept':'application/vnd.github+json'},extra||{});}
+
+async function ghGet(){
+  const r=await fetch(API(),{headers:ghHeaders(),cache:'no-store'});
+  if(r.status===401||r.status===404) throw new Error('auth');
+  const g=await r.json();
+  const f=g.files||{};
+  const j=(n,d)=>{try{return JSON.parse(f[n].content);}catch(e){return d;}};
+  return {inbox:j('inbox.json',{messages:[]}),outbox:j('outbox.json',{messages:[]}),meta:j('meta.json',{session:null,sessions:[]})};
+}
+async function ghPatch(files){
+  const body=JSON.stringify({files:Object.fromEntries(Object.entries(files).map(([n,c])=>[n,{content:c}]))});
+  const r=await fetch(API(),{method:'PATCH',headers:ghHeaders({'Content-Type':'application/json'}),body});
+  if(!r.ok) throw new Error('patch '+r.status);
+}
+function nextId(...lists){let mx=0;lists.forEach(l=>l.forEach(m=>{mx=Math.max(mx,m.id||0);}));return mx+1;}
+
+// ---- UI ----
+function addMsg(role,text,opts={}){
+  const wrap=document.createElement('div');
+  wrap.className='msg '+role+(opts.err?' err':'');
+  const who=role==='user'?'YOU':'CDX', name=role==='user'?'あなた':'Codex';
+  wrap.innerHTML=`<div class="who">${who}</div><div class="body"><div class="name">${name}</div><div class="bubble">${esc(text)}</div></div>`;
+  log.appendChild(wrap); log.scrollTop=log.scrollHeight; return wrap;
+}
+
+let processedOut=new Set();
+let pendingBubble=null;
+
+async function poll(){
+  if(!GIST||!TOKEN) return;
+  try{
+    const {outbox,meta}=await ghGet();
+    if(meta&&meta.session) sessEl.textContent=meta.session.slice(0,8);
+    (outbox.messages||[]).forEach(m=>{
+      if(processedOut.has(m.id)) return;
+      processedOut.add(m.id);
+      if(m.text==='__sessions_updated__'){ renderSessions(meta.sessions||[],meta.session); return; }
+      if(m.text==='__switched__'){ renderHistory(m.history||[]); if(m.session)sessEl.textContent=m.session.slice(0,8);
+        addMsg('codex','▲ここまで過去の会話。続けて入力すれば続きから再開します。'); return; }
+      if(m.text==='__deleted__'||m.text==='__delete_failed__') return;
+      if(pendingBubble){pendingBubble.remove();pendingBubble=null;}
+      addMsg(m.role==='user'?'user':'codex', m.text||'(空)', {err:m.role==='system'&&/失敗|error/i.test(m.text||'')});
+      if(m.session)sessEl.textContent=m.session.slice(0,8);
+    });
+  }catch(e){
+    if(e.message==='auth'){ openSetup(); }
+  }
+}
+
+async function sendCtrl(type,extra={}){
+  const {inbox,outbox}=await ghGet();
+  const id=nextId(inbox.messages,outbox.messages);
+  inbox.messages.push(Object.assign({id,type,ts:Date.now()},extra));
+  await ghPatch({'inbox.json':JSON.stringify({messages:inbox.messages})});
+  return id;
+}
+
+async function ask(){
+  const text=input.value.trim(); if(!text) return;
+  if(!GIST||!TOKEN){ openSetup(); return; }
+  input.value=''; input.style.height='auto'; send.disabled=true;
+  addMsg('user',text);
+  pendingBubble=addMsg('codex','Codexが考えています…'); pendingBubble.querySelector('.bubble').classList.add('typing');
+  try{
+    await sendCtrl('ask',{text,mode:modeSel.value});
+  }catch(e){
+    if(pendingBubble){pendingBubble.remove();pendingBubble=null;}
+    addMsg('codex','送信エラー: '+e.message,{err:true});
+    if(e.message==='auth') openSetup();
+  }finally{ send.disabled=false; input.focus(); }
+}
+
+send.addEventListener('click',ask);
+input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ask();}});
+input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,200)+'px';});
+$('reset').addEventListener('click',async()=>{ log.innerHTML=''; processedOut.clear(); await sendCtrl('reset'); sessEl.textContent='--'; addMsg('codex','新しい会話を開始しました。'); });
+
+// ---- drawer ----
+const drawer=$('drawer'),overlay=$('overlay'),sessList=$('sessList'),sessSearch=$('sessSearch');
+$('sessionsBtn').addEventListener('click',async()=>{ drawer.hidden=false;overlay.hidden=false; sessList.innerHTML='<div class="dloading">読み込み中…</div>'; await sendCtrl('list'); });
+function closeDrawer(){drawer.hidden=true;overlay.hidden=true;}
+$('drawerClose').addEventListener('click',closeDrawer); overlay.addEventListener('click',closeDrawer);
+sessSearch.addEventListener('input',()=>{filterSessions(sessSearch.value.trim().toLowerCase());});
+let allSessions=[],curSession=null;
+function fmtTime(iso){if(!iso)return '';try{return new Date(iso).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return iso.slice(0,16);}}
+function renderSessions(list,current){ allSessions=list;curSession=current; drawItems(list); }
+function filterSessions(q){ drawItems(!q?allSessions:allSessions.filter(s=>((s.title||'')+ (s.cwd||'')).toLowerCase().includes(q))); }
+function drawItems(list){
+  if(!list.length){sessList.innerHTML='<div class="dloading">該当なし</div>';return;}
+  sessList.innerHTML='';
+  list.forEach(s=>{
+    const el=document.createElement('div');
+    el.className='sitem'+(curSession&&s.id===curSession?' active':'');
+    const folder=(s.cwd||'').split(/[\\/]/).pop()||'';
+    el.innerHTML=`<button class="strash" title="削除">🗑</button><div class="t">${esc(s.title)}</div><div class="m">${fmtTime(s.time)} · ${esc(folder)} · ${(s.id||'').slice(0,8)}</div>`;
+    el.addEventListener('click',async()=>{ closeDrawer(); log.innerHTML=''; processedOut.clear(); addMsg('codex','会話を読み込み中…'); await sendCtrl('switch',{sid:s.id}); });
+    el.querySelector('.strash').addEventListener('click',async ev=>{ ev.stopPropagation(); if(!confirm('この会話を削除しますか？'))return; await sendCtrl('delete',{sid:s.id}); el.remove(); });
+    sessList.appendChild(el);
+  });
+}
+function renderHistory(msgs){ log.innerHTML=''; processedOut.clear(); if(!msgs.length){addMsg('codex','（表示できるメッセージがありません）');return;} msgs.forEach(m=>addMsg(m.role==='user'?'user':'codex',m.text)); }
+
+// ---- setup panel ----
+function openSetup(){ $('setup').hidden=false; $('tokenInput').value=TOKEN||''; $('gistInput').value=GIST||''; }
+$('setupSave').addEventListener('click',()=>{
+  TOKEN=$('tokenInput').value.trim(); GIST=$('gistInput').value.trim()||GIST;
+  if(!TOKEN||!GIST){alert('トークンとGist IDが必要です');return;}
+  localStorage.setItem('cr_token',TOKEN); localStorage.setItem('cr_gist',GIST);
+  $('setup').hidden=true; processedOut.clear(); log.innerHTML=''; addMsg('codex','接続しました。指示を入力してください。');
+});
+
+// ---- boot ----
+if(!GIST||!TOKEN){ openSetup(); } else { addMsg('codex','接続済み。指示を入力してください。'); }
+setInterval(poll, 3000);
+poll();
+</script>
+</body>
+</html>
